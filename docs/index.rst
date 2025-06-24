@@ -28,4 +28,4 @@ Mailing list
 
 To subscribe to the 32-ID mailing list send an e-mail to 32-id-owner@lists.anl.gov. 
 
-Mailing list administrators can configure the mailing list `here <https://lists.anl.gov/mailman3/lists/32-id.lists.anl.gov/>`_. 
+Mailing list administrators can configure the mailing list `here <https://lists-web.anl.gov/mailman3/lists/32-id.lists.anl.gov/>`_. 
