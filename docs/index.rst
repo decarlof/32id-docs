@@ -10,6 +10,7 @@ Content
 
    source/about
    source/manual
+   source/procedures
    source/txm
    source/hsi
    source/pm
