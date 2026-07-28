@@ -98,6 +98,15 @@ Preconditions
   The position list spans the full 0–100 µm closed-loop stroke; if
   the stage is mis-aligned the random walk will produce nonsense
   aperture positions even though the script runs cleanly.
+- **Softglue GateDly delays are set for the current exposure time.**
+  ``32idMZ1:SG:GateDly-2_DLY`` and ``32idMZ1:SG:GateDly-3_DLY``
+  should be set so each per-axis piezo step pulse arrives after the
+  camera has finished integrating the frame (typically 5 ms delay
+  for a standard exposure — ``DLY = 50000`` in 10 MHz clock cycles).
+  See the *Softglue configuration for the coded-aperture fly-scan*
+  subsection of the NV200D block in :doc:`../manual/manual_020` for
+  the caQtDM screens, the delay math, and the ``UpCntr-3`` /
+  ``UpCntr-4`` pulse-count verification recipe.
 
 
 Parameters
@@ -216,9 +225,21 @@ Failure modes
        network configuration (Lantronix XPort).
    * - Script runs but tomography acquisitions do not advance the
        piezo positions during fly-scan
-     - The FPGA-output-to-NV200D-TRG-IN cable mapping may be
-       wrong. Verify the 32-ID FPGA trigger channels feeding each
-       controller's TRG IN.
+     - Two likely causes. **(a)** The FPGA-output-to-NV200D-TRG-IN
+       cable mapping may be wrong. Documented mapping:
+       X → ``FPGA out2`` → ``32idMZ1:SG:GateDly-2_DLY``, Y →
+       ``FPGA out3`` → ``32idMZ1:SG:GateDly-3_DLY`` (see the *FPGA
+       trigger* field in the NV200D block of
+       :doc:`../manual/manual_020`). Verify the physical coax runs
+       at the softGlueZynq patch panel match. **(b)** The GateDly
+       block(s) may be dropping pulses. Open ``softGlueZynqAll.adl``
+       and watch ``UpCntr-3`` (JenaX) and ``UpCntr-4`` (JenaY)
+       during a live scan — both should increment on every camera
+       trigger and stay within one count of each other. Drift
+       between them (or one stuck at zero) localises the fault to
+       that specific trigger path. See the *Softglue configuration
+       for the coded-aperture fly-scan / Pulse-count verification*
+       subsection in :doc:`../manual/manual_020`.
    * - Script exits cleanly but ``positions_*.txt`` not saved
      - The script must be run from a writable directory. ``cd`` to
        a writable location (step 2) before running.

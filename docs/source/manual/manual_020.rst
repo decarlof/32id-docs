@@ -113,11 +113,25 @@ Coded aperture (Jena NV200D piezo)
    later added it must be stopped while the script runs.
 :FPGA trigger: The FPGA sends a TTL pulse to the NV200D **TRG IN**
    connector (pin 3 of the I/O D-Sub, 0/3.3–5 V) to step to the next
-   position during the camera readout interval. Each rising edge advances
-   the actuator to the next buffered position. FPGA output channels and
-   the softGlue GateDelay PVs are 32-ID-specific — TBD (at 2-BM the X/Y
-   cables went to FPGA out3/out2 with delay PVs
-   ``2bmbMZ1:SG:GateDly-3_DLY`` / ``-2_DLY``).
+   position during the camera readout interval. Each rising edge
+   advances the actuator to the next buffered position.
+
+   Per-axis wiring at 32-ID (same convention as 2-BM):
+
+   =====  ================================================  ============  ===============================
+   Axis   NV200D host (TRG IN)                              FPGA out      softGlue delay PV
+   =====  ================================================  ============  ===============================
+   X      ``piexo3.xray.aps.anl.gov`` (``10.54.102.8``)     ``out2``      ``32idMZ1:SG:GateDly-2_DLY``
+   Y      ``piexo4.xray.aps.anl.gov`` (``10.54.102.46``)    ``out3``      ``32idMZ1:SG:GateDly-3_DLY``
+   =====  ================================================  ============  ===============================
+
+   Delay units are 10 MHz clock cycles (100 ns / count); set to
+   detector exposure time + safety margin. The ``32idMZ1:``
+   softGlueZynq prefix is confirmed against the IOC's own startup
+   configuration at
+   ``/net/s32dserv/xorApps/epics/synApps_MZ/ioc/32idMZ1/iocBoot/ioc32idMZ1/st.cmd``
+   (``epicsEnvSet("PREFIX", "32idMZ1:")``) and verified on the
+   beamline 2026-07-28.
 :Programming procedure: Triggered-step buffer programming. Up to **1024
    positions** (onboard arbitrary-waveform-generator buffer maximum) are
    pre-loaded into each controller; the default is 256 per axis.
@@ -152,3 +166,133 @@ Coded aperture (Jena NV200D piezo)
    coded-aperture stage is mechanically aligned so the 0–100 µm stroke
    maps to sensible aperture positions in the beam. (No ``JenaNV200D``
    IOC is deployed at 32-ID, so there is no IOC to stop.)
+
+
+Softglue configuration for the coded-aperture fly-scan
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The softGlueZynq FPGA on ``32idMZ1:SG:`` implements the complete
+trigger chain for coded-aperture fly-scans, from the raw PSO
+position pulses out of the Aerotech controller through to the two
+per-axis piezo step pulses. All of the blocks below live on the
+``softGlueZynqAll.adl`` panel and can be edited via the caQtDM
+interface running on ``txm4``.
+
+**Trigger chain overview** (in order along the signal path):
+
+    PSO → memPulseSeq → GateDly-1 → trigILF → (MUX) →
+    outTrig → GateDly-2 → JenaX → FPGA out2 → X-axis piezo
+                → GateDly-3 → JenaY → FPGA out3 → Y-axis piezo
+
+Camera-trigger side (PSO subset)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``memPulseSeq`` block picks a subset of the PSO pulses to use
+as camera triggers (interlaced-trigger pattern). It reads its
+selection from a memory table pre-loaded via
+``write_PSO_array()`` (see the ``interlaced`` fpga macros).
+
+.. figure:: ../img/softglue_004.png
+   :width: 480px
+   :align: center
+   :alt: memPulseSeq block
+
+   ``memPulseSeq`` block on ``32idMZ1:SG:``. Inputs: ``PSO`` on
+   ``IN``, ``enable`` on ``OUTEN``; N = 2400 (buffer depth).
+   Output goes to the ``trig`` signal, which is then fed into
+   ``GateDly-1``.
+
+.. figure:: ../img/softglue_008.png
+   :width: 480px
+   :align: center
+   :alt: GateDly-1 producing trigILF
+
+   ``GateDly-1`` — IN = ``trig`` (from ``memPulseSeq`` above),
+   clock = ``ck10`` (10 MHz), ``DLY = 0``, ``WIDTH = 100``
+   (10 µs). OUT is ``trigILF``, the interlaced-trigger signal.
+   A downstream ``MUX2-1`` then selects between ``PSO`` and
+   ``trigILF`` to drive ``outTrig`` (the actual camera trigger).
+
+Piezo-step side (per-axis GateDly)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Two additional GateDly blocks generate the step pulses that advance
+the two NV200D controllers. Both take ``outTrig`` (the same camera
+trigger routed to the detector) as input and produce a delayed
+step pulse aligned to land during the frame readout interval,
+**after** the sensor has integrated:
+
+.. figure:: ../img/piezo_softGlueZynq_GateDly_02.png
+   :width: 480px
+   :align: center
+   :alt: GateDly-2 (drives X axis)
+
+   ``GateDly-2`` — IN = ``outTrig`` + ``ck10``, ``DLY = 50000``
+   (50000 × 100 ns = **5 ms** delay), ``WIDTH = 100`` (10 µs).
+   OUT is the ``JenaX`` softGlue signal → FPGA ``out2`` →
+   **X-axis** NV200D controller (``piexo3``,
+   ``10.54.102.8``).
+
+.. figure:: ../img/piezo_softGlueZynq_GateDly_03.png
+   :width: 480px
+   :align: center
+   :alt: GateDly-3 (drives Y axis)
+
+   ``GateDly-3`` — identical shape and settings. OUT is the
+   ``JenaY`` softGlue signal → FPGA ``out3`` → **Y-axis** NV200D
+   controller (``piexo4``, ``10.54.102.46``). Same 5 ms delay,
+   10 µs pulse width.
+
+Adjust ``DLY`` when the exposure time changes:
+
+- ``DLY`` and ``WIDTH`` are in **10 MHz clock cycles**
+  (100 ns per count).
+- ``DLY = 50000`` → 5 ms. Increase for longer exposures so the
+  piezo step happens after the sensor integrates.
+- ``WIDTH = 100`` → 10 µs pulse (comfortably above the NV200D
+  ``TRG IN`` minimum sensitivity).
+
+PVs (set from the caQtDM Gate&Delay page or with ``caput``):
+
+- ``32idMZ1:SG:GateDly-2_DLY`` and ``32idMZ1:SG:GateDly-2_WIDTH`` (X)
+- ``32idMZ1:SG:GateDly-3_DLY`` and ``32idMZ1:SG:GateDly-3_WIDTH`` (Y)
+
+Pulse-count verification
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Two dedicated ``UpCntr`` blocks on the ``softGlueZynqAll``
+panel count the delivered step pulses so an operator can confirm
+that both axes are stepping in lock-step with the camera:
+
+.. figure:: ../img/piezo_softGlueZynqAll.png
+   :width: 1024px
+   :align: center
+   :alt: 32-ID softGlueZynqAll showing UpCntr-3 and UpCntr-4
+
+   ``softGlueZynqAll.adl`` on ``32idMZ1:SG:``. Right column,
+   top-to-bottom: ``UpCntr-1`` counts ``PSO`` (master pulse
+   count), ``UpCntr-2`` counts ``trigILF`` (interlaced-trigger
+   subset), ``UpCntr-3`` counts ``JenaX`` (X piezo pulse count),
+   ``UpCntr-4`` counts ``JenaY`` (Y piezo pulse count). During any
+   active scan ``UpCntr-3`` and ``UpCntr-4`` should stay within
+   one count of each other (both stepped by the same camera
+   trigger); drift between them means one of the two piezo trigger
+   paths is dropping pulses.
+
+The softGlue internal signal names ``JenaX`` and ``JenaY`` are set
+to match the axis they drive: ``GateDly-2`` → ``JenaX`` → FPGA
+``out2`` → Jena X controller; ``GateDly-3`` → ``JenaY`` → FPGA
+``out3`` → Jena Y controller. Signal name, GateDly index, FPGA out
+number, and axis are all consistent — same convention as 2-BM.
+
+.. note::
+
+   **32-ID vs 2-BM softGlue deployment.** At 2-BM the softGlueZynq
+   IOC runs on the MicroZed and auto-starts at boot; the caQtDM
+   interface is opened from ``arcturus`` via ``./start_caQtDM_2bmbMZ1``.
+   At 32-ID the caQtDM interface runs on ``txm4`` against the
+   ``32idMZ1:`` IOC (deployed under
+   ``/net/s32dserv/xorApps/epics/synApps_MZ/ioc/32idMZ1/``); launch
+   scripts are ``./start_epics_32idMZ1`` and
+   ``./start_caQtDM_32idMZ1``. The FPGA firmware and block layout
+   are otherwise identical between the two beamlines.
