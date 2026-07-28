@@ -109,6 +109,29 @@ Preconditions
   ``UpCntr-4`` pulse-count verification recipe.
 
 
+To run
+------
+
+From ``txm4`` as ``usertxm``, activate the dedicated ``nv200``
+conda env and change into the ``32id-procedures`` checkout::
+
+    ssh usertxm@txm4
+    (base) usertxm@txm4 ~ $ conda activate nv200
+    (nv200) usertxm@txm4 ~ $ cd ~/conda/32id-procedures-decarlof/procedures/
+
+Inspect the script's argument list::
+
+    (nv200) usertxm@txm4 ~/.../32id-procedures-decarlof/procedures $ python nv200_trigger_step.py -h
+    usage: nv200_trigger_step.py [-h] [--random] [--n N]
+
+    NV200 triggered step mode
+
+    options:
+      -h, --help  show this help message and exit
+      --random    Use random positions instead of evenly-spaced (default: linspace)
+      --n N       Number of positions to load (default: 256, max: 1024)
+
+
 Parameters
 ----------
 
