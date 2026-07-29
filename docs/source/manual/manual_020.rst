@@ -178,6 +178,28 @@ per-axis piezo step pulses. All of the blocks below live on the
 ``softGlueZynqAll.adl`` panel and can be edited via the caQtDM
 interface running on ``txm4``.
 
+Hardware identity (MicroZed carrier):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 45 35
+
+   * - Field
+     - Value
+     - Notes
+   * - IP
+     - ``10.54.102.17``
+     - 32-ID private subnet
+   * - Hostname
+     - ``mz-32id01``
+     - TXM softGlue MicroZed
+   * - MAC
+     - ``00:19:B3:02:14:F5``
+     - Bound to this unit
+   * - IOC dir
+     - ``/net/s32dserv/xorApps/epics/synApps_MZ/ioc/32idMZ1/``
+     - Start with ``./start_epics_32idMZ1``
+
 **Trigger chain overview** (in order along the signal path):
 
     PSO → memPulseSeq → GateDly-1 → trigILF → (MUX) → outTrig → GateDly-2 → JenaX → FPGA out2 → X-axis piezo → GateDly-3 → JenaY → FPGA out3 → Y-axis piezo
@@ -188,7 +210,11 @@ Camera-trigger side (PSO subset)
 The ``memPulseSeq`` block picks a subset of the PSO pulses to use
 as camera triggers (interlaced-trigger pattern). It reads its
 selection from a memory table pre-loaded via
-``write_PSO_array()`` (see the ``interlaced`` fpga macros).
+``write_PSO_array()`` from `interlaced/fpga/macros_ILF.py
+<https://github.com/decarlof/interlaced/blob/main/fpga/macros_ILF.py>`__
+(e.g. ``m.write_PSO_array([0, 2, 4, 6])`` triggers only on PSO edges
+0, 2, 4, 6). A deployed copy of the same file lives at
+``/net/s32dserv/xorApps/epics/synApps_MZ/ioc/32idMZ1/32idMZ1App/op/python/macros_ILF.py``.
 
 .. figure:: ../img/softglue_004.png
    :width: 480px
@@ -294,3 +320,39 @@ number, and axis are all consistent — same convention as 2-BM.
    scripts are ``./start_epics_32idMZ1`` and
    ``./start_caQtDM_32idMZ1``. The FPGA firmware and block layout
    are otherwise identical between the two beamlines.
+
+
+Projection Microscope softGlue (32idMZ2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Second softGlueZynq MicroZed at 32-ID, dedicated to the Projection
+Microscope instrument (distinct from the TXM softGlue at
+``32idMZ1:`` documented above). Stub entry — expand when this
+instrument's trigger chain is documented in detail.
+
+Hardware identity (MicroZed carrier):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 45 35
+
+   * - Field
+     - Value
+     - Notes
+   * - IP
+     - ``10.54.102.27``
+     - 32-ID private subnet
+   * - Hostname
+     - ``mz-32id02``
+     - Projection Microscope softGlue MicroZed
+   * - MAC
+     - ``00:19:B3:02:14:F6``
+     - Bound to this unit
+   * - IOC dir
+     - ``/net/s32dserv/xorApps/epics/synApps_MZ/ioc/32idMZ2/``
+     - EPICS prefix ``32idMZ2:``
+
+Interlaced-trigger helper (deployed copy of the same
+``macros_ILF.py`` from `decarlof/interlaced
+<https://github.com/decarlof/interlaced/blob/main/fpga/macros_ILF.py>`__):
+``/net/s32dserv/xorApps/epics/synApps_MZ/ioc/32idMZ2/32idMZ2App/op/python/macros_ILF.py``.
