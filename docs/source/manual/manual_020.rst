@@ -169,7 +169,7 @@ Coded aperture (Jena NV200D piezo)
 
 
 Softglue configuration for the coded-aperture fly-scan
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The softGlueZynq FPGA on ``32idMZ1:SG:`` implements the complete
 trigger chain for coded-aperture fly-scans, from the raw PSO
@@ -180,9 +180,7 @@ interface running on ``txm4``.
 
 **Trigger chain overview** (in order along the signal path):
 
-    PSO → memPulseSeq → GateDly-1 → trigILF → (MUX) →
-    outTrig → GateDly-2 → JenaX → FPGA out2 → X-axis piezo
-                → GateDly-3 → JenaY → FPGA out3 → Y-axis piezo
+    PSO → memPulseSeq → GateDly-1 → trigILF → (MUX) → outTrig → GateDly-2 → JenaX → FPGA out2 → X-axis piezo → GateDly-3 → JenaY → FPGA out3 → Y-axis piezo
 
 Camera-trigger side (PSO subset)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
