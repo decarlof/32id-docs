@@ -104,13 +104,19 @@ Coded aperture (Jena NV200D piezo)
    The clear aperture is what the coded-aperture mask itself is
    mounted into; the X / Y piezo motion moves the mask within the
    beam.
-:Device configuration: Both controllers must be set to **Xon/Xoff**
-   (software) flow control via the Lantronix XPort web interface for the
-   EPICS support to work correctly.
-:IOC: None deployed at 32-ID as of the relocation (the 2-BM deployment
-   ran a ``JenaNV200D`` IOC on ``arcturus``). The triggered-step script
-   talks to the controllers directly over Telnet; if an EPICS IOC is
-   later added it must be stopped while the script runs.
+:Device configuration: The Lantronix XPorts on both controllers are
+   set to **Flow 05 (XON_XOFF_PASS_TO_HOST)**. This is the mode the
+   ``nv200`` Python library sets on connect and persists in NVM. The
+   EPICS IOC uses a local proto override under
+   ``iocBoot/iocJenaNV200D/JenaNV100D.proto`` that accepts the framed
+   reply — see :doc:`manual_030` "Device configuration" for details
+   and pairing rules.
+:IOC: ``JenaNV200D`` runs on ``txm4`` as ``usertxm`` under procServ +
+   ``screen``. Start/stop via ``~/scripts/JenaNV200D_IOC.sh`` /
+   ``JenaNV200D_IOC_stop.sh`` or the ``iocs_start`` MEDM screen. The
+   IOC must be stopped before running the triggered-step script (only
+   one Telnet session per controller). See :doc:`manual_030` for the
+   full IOC operation walk-through.
 :FPGA trigger: The FPGA sends a TTL pulse to the NV200D **TRG IN**
    connector (pin 3 of the I/O D-Sub, 0/3.3–5 V) to step to the next
    position during the camera readout interval. Each rising edge
@@ -159,13 +165,14 @@ Coded aperture (Jena NV200D piezo)
 
 .. note::
 
-   **Preconditions for the triggered-step run** (adapted from the 2-BM
-   procedure): the dedicated ``nv200`` conda env is active
-   (``conda activate nv200``); both controllers are reachable
-   (``ping 10.54.102.8`` and ``ping 10.54.102.46``); and the
-   coded-aperture stage is mechanically aligned so the 0–100 µm stroke
-   maps to sensible aperture positions in the beam. (No ``JenaNV200D``
-   IOC is deployed at 32-ID, so there is no IOC to stop.)
+   **Preconditions for the triggered-step run**: the dedicated
+   ``nv200`` conda env is active (``conda activate nv200``); both
+   controllers are reachable (``ping 10.54.102.8`` and
+   ``ping 10.54.102.46``); the ``JenaNV200D`` EPICS IOC is stopped
+   (``~/scripts/JenaNV200D_IOC_stop.sh``) — only one Telnet session
+   per controller is allowed; and the coded-aperture stage is
+   mechanically aligned so the 0–100 µm stroke maps to sensible
+   aperture positions in the beam.
 
 
 Softglue configuration for the coded-aperture fly-scan
