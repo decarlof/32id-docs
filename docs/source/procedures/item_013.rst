@@ -67,12 +67,12 @@ Devices
 
 .. note::
 
-   Unlike 2-BM, **no ``JenaNV200D`` EPICS IOC is deployed at 32-ID**
-   (as of the relocation). The one-Telnet-connection-at-a-time
-   constraint on the NV200D therefore has nothing else competing for
-   the connection, so the IOC stop/start steps from the 2-BM
-   procedure do not apply here. If an IOC is later deployed at 32-ID,
-   it must be stopped for the duration of the script.
+   As at 2-BM, a ``JenaNV200D`` EPICS IOC is deployed at 32-ID (runs
+   on ``txm4`` as ``usertxm`` under procServ + ``screen``; see
+   :doc:`../manual/manual_030` for the full IOC operation walk-through).
+   Because the NV200D allows only one Telnet connection at a time, the
+   IOC must be stopped for the duration of the script and restarted
+   when the script exits.
 
 
 Preconditions
