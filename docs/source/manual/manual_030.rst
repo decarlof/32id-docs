@@ -141,7 +141,12 @@ number of 10 MHz clock cycles, i.e. 100 ns per unit)::
   32idMZ1:SG:GateDly-2_DLY    # X axis delay
   32idMZ1:SG:GateDly-3_DLY    # Y axis delay
 
-Set the DLY field to the detector exposure time plus a safety margin.
+Set the DLY field to the detector exposure time plus a safety margin
+(e.g. 0.5 s exposure → ``5000000``). The ``nv200_trigger_step_tomoscan.py``
+variant mirrors ``32id:TomoScan:ExposureTime`` into both PVs
+automatically at startup and on every change, so no manual bookkeeping
+is required in normal operation.
+
 For the full softGlue chain (PSO → GateDly → JenaX/Y → FPGA out), see
 the "Softglue configuration for the coded-aperture fly-scan" subsection
 of :doc:`manual_020`.
@@ -161,7 +166,8 @@ I/O D-Sub, 0/3.3–5 V) advances the actuator to the next position.
 
 Activate the dedicated ``nv200`` conda env (Python 3.12,
 ``/home/beams/USERTXM/conda/anaconda/envs/nv200``), which already has
-the required ``nv200`` + ``numpy`` libraries installed::
+the required ``nv200``, ``numpy``, and ``pyepics`` libraries
+installed::
 
   conda activate nv200
 
@@ -169,59 +175,110 @@ To recreate the env from scratch::
 
   conda create -n nv200 python=3.12 -y
   conda activate nv200
-  pip install nv200 numpy
+  pip install nv200 numpy pyepics
 
-The script lives in the ``32id-procedures`` repository
-(`procedures/nv200_trigger_step.py
-<https://github.com/xray-imaging/32id-procedures/blob/main/procedures/nv200_trigger_step.py>`__).
-Change to that directory before invoking it — the script writes
-``positions_x.txt`` / ``positions_y.txt`` to the current working
-directory and looks for no input files. Run on a computer on the
-beamline's private subnet (e.g. ``txm4``)::
+Script variants
+---------------
+
+Three sibling scripts live in
+``~/conda/32id-procedures-decarlof/procedures/``, all sharing the
+same core (asyncio Telnet, waveform-buffer load, timestamped
+``positions_x_YYYYMMDD-HHMMSS.txt`` / ``positions_y_...`` outputs,
+clean shutdown that restores serial-driven closed-loop):
+
+- ``nv200_trigger_step.py`` — base script. Position list spans the
+  actuator's full 0–100 µm stroke.
+- ``nv200_trigger_step_range.py`` — adds ``--range MAX_UM`` to cap
+  the upper end of the position list at a chosen value.
+- ``nv200_trigger_step_tomoscan.py`` — **recommended for production
+  tomo sessions.** Includes ``--range`` and additionally subscribes
+  to three tomoscan PVs:
+
+  * ``<prefix>StartScan`` — on 0 → 1 transition, both piezos are
+    re-armed at index 0 so the first camera frame of every scan is
+    at ``positions[0]``.
+  * ``<prefix>ScanStatus`` — on transition to ``"Scan complete"``,
+    both piezos are disarmed via ``wg.stop()`` so stray trigger
+    pulses between scans can't advance the buffer.
+  * ``<prefix>ExposureTime`` — on any change, both
+    ``32idMZ1:SG:GateDly-2_DLY`` / ``-3_DLY`` are caput'd to the
+    matching count of 100 ns units (0.5 s → 5 000 000).
+
+  ``<prefix>`` defaults to ``32id:TomoScan:`` and can be overridden
+  with ``--tomoscan-prefix``.
+
+Running
+-------
+
+Run on a computer on the beamline's private subnet (e.g. ``txm4``).
+The example below uses the recommended ``_tomoscan`` variant::
 
   (base) usertxm@txm4 ~ $ ~/scripts/JenaNV200D_IOC_stop.sh
   (base) usertxm@txm4 ~ $ conda activate nv200
   (nv200) usertxm@txm4 ~ $ cd ~/conda/32id-procedures-decarlof/procedures
-  (nv200) usertxm@txm4 ~/.../procedures $ python nv200_trigger_step.py [--n N] [--random]
+  (nv200) usertxm@txm4 ~/.../procedures $ python nv200_trigger_step_tomoscan.py [--n N] [--random] [--range MAX_UM]
 
-Arguments:
+Common arguments (see the procedure page :doc:`../procedures/item_013`
+for the full parameter table):
 
 - ``--n N`` — number of positions to load (default: 256, max: 1024)
 - ``--random`` — use random positions instead of evenly spaced (linspace)
+- ``--range MAX_UM`` — cap the position-list upper end (``_range`` and
+  ``_tomoscan`` variants only)
+- ``--tomoscan-prefix PREFIX`` — override the tomoscan PV prefix
+  (``_tomoscan`` variant only; default ``32id:TomoScan:``)
 
-See the procedure page :doc:`../procedures/item_013` for the formal
-procedure definition (preconditions, parameters, steps,
-postconditions, failure modes) that this operational walk-through
-implements.
-
-Example output::
+Example output (``_tomoscan`` variant)::
 
   Connecting to X (10.54.102.8)...
   Connecting to Y (10.54.102.46)...
   --- X axis ---
     Actuator stroke: 0.0 … 100.0 µm
-    Auto-generated 256 evenly-spaced positions.
+    Auto-generated 256 evenly-spaced positions in [0.0, 100.0] µm.
     Loading 256 positions into buffer...
       128/256
       256/256
     Running. 256 positions loaded. Current position: 0.000 µm
   --- Y axis ---
     Actuator stroke: 0.0 … 100.0 µm
-    Auto-generated 256 evenly-spaced positions.
+    Auto-generated 256 evenly-spaced positions in [0.0, 100.0] µm.
     Loading 256 positions into buffer...
       128/256
       256/256
     Running. 256 positions loaded. Current position: 0.000 µm
+  Positions saved to positions_x_20260804-201822.txt and positions_y_20260804-201822.txt
+  Subscribed to 32id:TomoScan:StartScan (current value: 0)
+  [delay] exposure=0.500000 s -> 32idMZ1:SG:GateDly-2_DLY = 32idMZ1:SG:GateDly-3_DLY = 5000000 units
+  Subscribed to 32id:TomoScan:ExposureTime (current value: 0.5 s)
+  Subscribed to 32id:TomoScan:ScanStatus (current value: "Scan complete")
 
   Running. Each rising edge on TRG IN (I/O connector pin 3) steps to the next position.
+  Each tomoscan Start (StartScan 0->1) will re-arm both piezos at index 0.
+  Each tomoscan ScanStatus -> "Scan complete" will disarm both piezos.
+  Each ExposureTime change will update both piezo trigger delays.
+
+  [tomoscan] 32id:TomoScan:StartScan -> 1 : re-arming both piezos at index 0
+    [X] re-armed at index 0
+    [Y] re-armed at index 0
+  ... scan runs ...
+  [tomoscan] 32id:TomoScan:ScanStatus -> "Scan complete" : disarming both piezos
+    [X] disarmed
+    [Y] disarmed
+
   Press Enter to stop...
   Stopping...
   Stopped. Manual control restored.
 
-When the script exits cleanly (Enter pressed), its ``finally`` block
-now also calls ``pid.set_mode(CLOSED_LOOP)`` and ``move_to_position(0.0)``
-on each device before closing. That restores serial-driven setpoint
-control, so the IOC can move the piezo as soon as you restart it.
+Clean-exit behavior
+-------------------
+
+On clean exit (Enter pressed), the script's ``finally`` block also
+calls ``pid.set_mode(CLOSED_LOOP)`` and ``move_to_position(0.0)`` on
+each device before closing. That restores serial-driven setpoint
+control so the EPICS IOC can move the piezo as soon as you restart
+it. The ``_tomoscan`` variant additionally disconnects all four
+EPICS PV handles (StartScan, ScanStatus, ExposureTime, the two
+GateDly writers).
 
 If a Python session is killed uncleanly (kill -9, crash) and the
 IOC's ``JenaNV200D:jena1:write`` no longer moves the piezo, the
